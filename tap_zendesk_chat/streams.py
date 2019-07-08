@@ -1,15 +1,23 @@
-from singer import metrics
-from pendulum import parse as dt_parse
-import time
 from datetime import datetime, timedelta
+from pendulum import parse as dt_parse
+from singer import metrics
 import json
 import singer
+import time
+import uuid
 
 LOGGER = singer.get_logger()
 
 
-def break_into_intervals(days, start_time: str, now: datetime):
-    delta = timedelta(days=days)
+def break_into_intervals(days, hours, start_time: str, now: datetime):
+    if days > 0:
+        if hours > 0:
+            delta = timedelta(days=days, hours=hours)
+        else:
+            delta = timedelta(days=days)
+    elif hours > 0:
+        delta = timedelta(hours=hours)
+
     start_dt = dt_parse(start_time)
     while start_dt < now:
         end_dt = min(start_dt + delta, now)
@@ -95,6 +103,8 @@ class Chats(Stream):
         based on the "start_date" in the config. When this is true, all
         bookmarks for this chat type will be ignored.
         """
+        pull_id = uuid.uuid4()
+
         ts_bookmark_key = [self.tap_stream_id, chat_type + "." + ts_field]
         url_offset_key = [self.tap_stream_id, "offset", chat_type + ".next_url"]
         if full_sync:
@@ -104,14 +114,15 @@ class Chats(Stream):
         next_url = ctx.bookmark(url_offset_key)
         max_bookmark = start_time
 
-        interval_days = 14
+        interval_days = 0
         interval_days_str = ctx.config.get("chat_search_interval_days")
         if interval_days_str is not None:
-            interval_days = int(interval_days_str)
-        LOGGER.info("Using chat_search_interval_days: {}".format(interval_days))
+            interval_days = float(interval_days_str)
+        LOGGER.info("{} Begin syncing using chat_search_interval_days: {}".format(pull_id, interval_days))
 
-        intervals = break_into_intervals(interval_days, start_time, ctx.now)
+        intervals = break_into_intervals(interval_days, 1, start_time, ctx.now)
         for start_dt, end_dt in intervals:
+            log_attrs = ["start_dt=%s" % start_dt, "end_dt=%s" % end_dt]
             while True:
                 if next_url:
                     search_resp = ctx.client.request(self.tap_stream_id, url=next_url)
@@ -126,6 +137,7 @@ class Chats(Stream):
                     self.write_page(chats)
                     max_bookmark = max(max_bookmark, *[c[ts_field] for c in chats])
                 if not next_url:
+                    LOGGER.info('{} Finished syncing: {}'.format(pull_id, ",".join(log_attrs)))
                     break
             ctx.set_bookmark(ts_bookmark_key, max_bookmark)
             ctx.write_state()
