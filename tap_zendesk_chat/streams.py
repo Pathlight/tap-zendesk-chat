@@ -160,6 +160,16 @@ class Chats(Stream):
 
         The overall affect here is if we are consistently getting too few
         records, we give up and pick up the task later.
+
+        NOTE: (PH) The way we are determining when we can fetch data right away
+        and when we should wait to fetch data is at odds with the incremental
+        api's documentation (which says when you get fewer than `limit`
+        records, you should fetch without waiting, and if you have exactly
+        `limit` records, you should wait). That advice doesn't make much
+        sense to me and doesn't seem to match my observations of how their
+        api works. What seems to happen is you get `limit` items until we
+        reach the most recent records, at which point they trickle in. This
+        method attempts to detect when it starts to trickle.
         """
 
         # If the average record count for the last
