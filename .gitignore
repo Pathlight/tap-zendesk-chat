@@ -94,9 +94,11 @@ ENV/
 
 # Custom stuff
 env.sh
+state.json
 config.json
 .autoenv.zsh
 
 rsa-key
 tags
 properties.json
+catalog.json
