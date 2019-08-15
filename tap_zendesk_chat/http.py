@@ -1,8 +1,11 @@
 import requests
 from singer import metrics
 import backoff
+import singer
 
 BASE_URL = "https://www.zopim.com"
+
+LOGGER = singer.get_logger()
 
 
 class RateLimitException(Exception):
@@ -20,9 +23,9 @@ class Client(object):
                           RateLimitException,
                           max_tries=10,
                           factor=2)
-    def request(self, tap_stream_id, params={}, url=None, url_extra=""):
-        with metrics.http_request_timer(tap_stream_id) as timer:
-            url = url or BASE_URL + "/api/v2/" + tap_stream_id + url_extra
+    def request(self, endpoint, params={}, url=None, url_extra=""):
+        with metrics.http_request_timer(endpoint) as timer:
+            url = url or BASE_URL + "/api/v2/" + endpoint + url_extra
             headers = {"Authorization": "Bearer " + self.access_token}
             if self.user_agent:
                 headers["User-Agent"] = self.user_agent
@@ -31,5 +34,12 @@ class Client(object):
             timer.tags[metrics.Tag.http_status_code] = response.status_code
         if response.status_code in [429, 502]:
             raise RateLimitException()
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except:
+            LOGGER.exception(response.content!r)
+            raise
         return response.json()
+
+    def incremental_request(self, endpoint, *args, **kwargs):
+        return self.request("incremental/" + endpoint, *args, **kwargs)

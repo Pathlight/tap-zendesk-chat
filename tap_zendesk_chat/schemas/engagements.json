@@ -1,0 +1,107 @@
+{
+    "properties": {
+        "id": {
+            "type": [
+                "string"
+            ]
+        },
+        "chat_id": {
+            "type": [
+                "string"
+            ]
+        },
+        "started_by": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        "agent_id": {
+            "type": [
+                "null",
+                "integer"
+            ]
+        },
+        "agent_full_name": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        "department_id": {
+            "type": [
+                "null",
+                "integer"
+            ]
+        },
+        "assigned": {
+            "type": [
+                "null",
+                "boolean"
+            ]
+        },
+        "accepted": {
+            "type": [
+                "null",
+                "boolean"
+            ]
+        },
+        "rating": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        "comment": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        "skills_requested": {
+            "type": [
+                "null",
+                "array"
+            ]
+        },
+        "skills_fulfilled": {
+            "type": [
+                "null",
+                "boolean"
+            ]
+        },
+        "timestamp": {
+            "type": [
+                "null",
+                "string"
+            ],
+            "format": "date-time"
+        },
+        "duration": {
+            "type": [
+                "null",
+                "number"
+            ]
+        },
+        "response_time": {
+            "type": [
+                "null",
+                "object"
+            ]
+        },
+        "count": {
+            "type": [
+                "null",
+                "object"
+            ]
+        }
+    },
+    "additionalProperties": false,
+    "type": [
+        "null",
+        "object"
+    ],
+    "tap_schema_dependencies": [
+        "chats"
+    ]
+}
