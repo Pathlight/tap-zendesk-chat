@@ -19,7 +19,8 @@
         "agent_id": {
             "type": [
                 "null",
-                "integer"
+                "integer",
+                "string"
             ]
         },
         "agent_full_name": {
@@ -28,10 +29,17 @@
                 "string"
             ]
         },
+        "agent_name": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
         "department_id": {
             "type": [
                 "null",
-                "integer"
+                "integer",
+                "string"
             ]
         },
         "assigned": {
@@ -96,7 +104,7 @@
             ]
         }
     },
-    "additionalProperties": false,
+    "additionalProperties": true,
     "type": [
         "null",
         "object"

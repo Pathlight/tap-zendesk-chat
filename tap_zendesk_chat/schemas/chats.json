@@ -189,42 +189,49 @@
         },
         "update_timestamp": {
             "type": [
+                "null",
                 "string"
             ],
             "format": "date-time"
         },
         "skills_requested": {
             "type": [
-                "object"
+                "null",
+                "array"
             ]
         },
         "skills_fulfilled": {
             "type": [
+                "null",
                 "boolean"
             ]
         },
         "abandon_time": {
             "type": [
+                "null",
                 "number"
             ]
         },
         "dropped": {
             "type": [
+                "null",
                 "boolean"
             ]
         },
         "proactive": {
             "type": [
+                "null",
                 "boolean"
             ]
         },
         "deleted": {
             "type": [
+                "null",
                 "boolean"
             ]
         }
     },
-    "additionalProperties": false,
+    "additionalProperties": true,
     "type": [
         "null",
         "object"

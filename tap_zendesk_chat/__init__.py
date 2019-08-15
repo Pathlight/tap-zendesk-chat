@@ -85,8 +85,11 @@ def sync(ctx):
     streams = [s for s in streams_.all_streams[start_idx:]
                if s.tap_stream_id in stream_ids_to_sync]
     for stream in streams:
-        ctx.state["currently_syncing"] = stream.tap_stream_id
+        # Output schemas of all streams to start so that we can output
+        # records of any type when needed.
         output_schema(stream)
+    for stream in streams:
+        ctx.state["currently_syncing"] = stream.tap_stream_id
         ctx.write_state()
         stream.sync(ctx)
     ctx.state["currently_syncing"] = None

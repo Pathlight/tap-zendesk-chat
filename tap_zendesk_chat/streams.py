@@ -85,6 +85,14 @@ class Agents(Stream):
         ctx.write_state()
 
 
+class Engagements(Stream):
+    def sync(self, ctx, engagements=None):
+        if not engagements:
+            LOGGER.warning('Engagements is called as a part of the Chat stream rather than directly')
+            return
+        self.write_page(engagements)
+
+
 class Chats(Stream):
     LIMIT = 1000
     # How long to wait for more records in seconds
@@ -189,6 +197,12 @@ class Chats(Stream):
         url_offset_key = [self.tap_stream_id, "offset", "chats-incremental.next_url"]
         ts_bookmark_key = [self.tap_stream_id, "chats-incremental.end_time"]
 
+        engagements = None
+        for stream in all_streams:
+            if stream.tap_stream_id == 'engagements' and stream.is_selected(ctx):
+                engagements = stream
+                break
+
         if full_sync:
             for stream in substreams:
                 stream.set_ts_bookmark(None)
@@ -225,6 +239,11 @@ class Chats(Stream):
             max_bookmark = max(max_bookmark, end_time)
 
             chats = resp['chats']
+            for chat in chats:
+                engagements_data = chat.pop('engagements', None)
+                if engagements and engagements_data:
+                    engagements.sync(ctx, engagements_data)
+
             self.write_page(chats)
             ctx.set_bookmark(ts_bookmark_key, max_bookmark)
             ctx.write_state()
@@ -288,6 +307,7 @@ ACCOUNT = Account("account", ["account_key"])
 all_streams = [
     Agents("agents", ["id"]),
     Chats("chats", ["id"]),
+    Engagements("engagements", ["id"]),
     Everything("shortcuts", ["name"]),
     Triggers("triggers", ["id"]),
     Bans("bans", ["id"]),
