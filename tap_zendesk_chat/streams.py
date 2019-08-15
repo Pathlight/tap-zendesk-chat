@@ -54,6 +54,11 @@ class Stream(object):
         singer.write_records(self.tap_stream_id, page)
         self.metrics(page)
 
+    def is_selected(self, ctx):
+        for context in ctx.catalog.streams:
+            if context.tap_stream_id == self.tap_stream_id:
+                return context.is_selected()
+        return False
 
 class Everything(Stream):
     def sync(self, ctx):
@@ -101,39 +106,32 @@ class Chats(Stream):
         """
         Since _sync actually has to manage two different object types
         (chat and offline_msg objects), create a small dataclass to store
-        the state for each one (and perform stateful operations on that state).
+        the state for each one (and perform stateful operations).
+
+        Should be able to get rid of this class entirely when we get rid of
+        `ts_bookmark_key`
         """
 
         tap_stream_id: str
+        ctx: 'Context'
+
+        # Deprecated fields. Won't be needed when we stop using
+        # `ts_bookmark_key`.
         chat_type: str
         ts_field: str
-        ctx: 'Context'
+
         start_time: datetime = None
-        buf: list = dataclasses.field(default_factory=list)
 
         @property
         def ts_bookmark_key(self):
+            # This is an old bookmark key that we are migrating away from. We
+            # read from it, but we don't write to it.
             return [self.tap_stream_id, self.chat_type + "." + self.ts_field]
 
         def update_start_date_bookmark(self):
             start_time = self.ctx.update_start_date_bookmark(self.ts_bookmark_key)
             self.start_time = dt_parse(start_time)
             return self.start_time
-
-        def set_ts_bookmark(self, ts_bookmark):
-            self.ctx.set_bookmark(self.ts_bookmark_key, ts_bookmark)
-
-        def write_page(self, parent_stream, ts_bookmark):
-            """
-            Writes buf to page and updates the timestamp bookmark if the
-            length of buf >= buffer_size or force is True. Returns whether
-            it wrote the page.
-            """
-            if self.buf:
-                # Don't bother writing an empty buffer (even if force is True)
-                parent_stream.write_page(self.buf)
-                self.buf = []
-            self.set_ts_bookmark(ts_bookmark)
 
     def should_give_up(self, pull_id, ctx, record_counts):
         """
@@ -189,13 +187,16 @@ class Chats(Stream):
         substreams = [chats, offline_msgs]
 
         url_offset_key = [self.tap_stream_id, "offset", "chats-incremental.next_url"]
+        ts_bookmark_key = [self.tap_stream_id, "chats-incremental.end_time"]
 
         if full_sync:
             for stream in substreams:
                 stream.set_ts_bookmark(None)
         for stream in substreams:
             stream.update_start_date_bookmark()
-        start_time = min(s.start_time for s in substreams)
+        start_time = dt_parse(ctx.update_start_date_bookmark(ts_bookmark_key))
+        if not start_time:
+            start_time = min(s.start_time for s in substreams)
         max_bookmark = start_time
 
         end_dt = ctx.now
@@ -223,16 +224,9 @@ class Chats(Stream):
             end_time = datetime.utcfromtimestamp(resp["end_time"])
             max_bookmark = max(max_bookmark, end_time)
 
-            for chat in resp['chats']:
-                if chat['type'] == 'chat':
-                    chats.buf.append(chat)
-                elif chat['type'] == 'offline_msg':
-                    offline_msgs.buf.append(chat)
-                else:
-                    raise NotImplementedError(chat['type'])
-
-            for stream in substreams:
-                stream.write_page(self, max_bookmark)
+            chats = resp['chats']
+            self.write_page(chats)
+            ctx.set_bookmark(ts_bookmark_key, max_bookmark)
             ctx.write_state()
 
             if not next_url:

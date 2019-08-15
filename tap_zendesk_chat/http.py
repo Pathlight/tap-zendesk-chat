@@ -37,7 +37,7 @@ class Client(object):
         try:
             response.raise_for_status()
         except:
-            LOGGER.exception(response.content!r)
+            LOGGER.exception(response.content)
             raise
         return response.json()
 
