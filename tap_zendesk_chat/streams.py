@@ -11,6 +11,16 @@ LOGGER = singer.get_logger()
 
 
 def clamp(min_val, val, max_val):
+    """
+    Clamp a number within a range
+
+    >>> clamp(0, 0.5, 1)
+    0.5
+    >>> clamp(0, -1, 1)
+    0
+    >>> clamp(0, 10, 1)
+    1
+    """
     return min(max_val, max(min_val, val))
 
 
@@ -88,7 +98,8 @@ class Agents(Stream):
 class Engagements(Stream):
     def sync(self, ctx, engagements=None):
         if not engagements:
-            LOGGER.warning('Engagements is called as a part of the Chat stream rather than directly')
+            # __init__.py calls sync on all streams, but this one is handled
+            # within the Chats stream, so ignore this call.
             return
         self.write_page(engagements)
 
