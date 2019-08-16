@@ -263,6 +263,8 @@ class Chats(Stream):
             for chat in chats:
                 engagements_data = chat.pop('engagements', None)
                 if engagements and engagements_data:
+                    for engagement in engagements_data:
+                        engagement['chat_id'] = chat['id']
                     engagements.sync(ctx, engagements_data)
 
             self.write_page(chats)
