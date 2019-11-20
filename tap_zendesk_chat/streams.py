@@ -207,13 +207,13 @@ class Chats(Stream):
         """
         pull_id = uuid.uuid4()
 
-        chats = self.SubStream(
+        chats_stream = self.SubStream(
             ctx=ctx, tap_stream_id=self.tap_stream_id, chat_type='chat',
             ts_field='end_timestamp')
-        offline_msgs = self.SubStream(
+        offline_msgs_stream = self.SubStream(
             ctx=ctx, tap_stream_id=self.tap_stream_id, chat_type='offline_msg',
             ts_field='timestamp')
-        substreams = [chats, offline_msgs]
+        substreams = [chats_stream, offline_msgs_stream]
 
         url_offset_key = [self.tap_stream_id, "offset", "chats-incremental.next_url"]
         ts_bookmark_key = [self.tap_stream_id, "chats-incremental.end_time"]
