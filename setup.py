@@ -11,7 +11,7 @@ setup(name="tap-zendesk-chat",
       install_requires=[
           "python-dateutil==2.6.0",  # because of singer-python issue
           "pendulum==1.2.0",  # because of singer-python issue
-          "singer-python==5.7.1",
+          "singer-python==5.7.*",
           "requests==2.20.0",
       ],
       entry_points="""

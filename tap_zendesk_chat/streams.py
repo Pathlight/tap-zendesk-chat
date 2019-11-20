@@ -1,11 +1,17 @@
 from datetime import datetime, timedelta
-from pendulum import parse as dt_parse
-from singer import metrics
 import dataclasses
 import json
-import singer
+import os
 import time
 import uuid
+
+from pendulum import parse as dt_parse
+from singer import metadata
+from singer import metrics
+from singer.transform import transform
+import singer
+
+from .util import load_schema
 
 LOGGER = singer.get_logger()
 
@@ -47,6 +53,9 @@ class Stream(object):
 
     :var tap_stream_id:
     :var pk_fields: A list of primary key fields"""
+
+    replication_key = None
+
     def __init__(self, tap_stream_id, pk_fields):
         self.tap_stream_id = tap_stream_id
         self.pk_fields = pk_fields
@@ -58,9 +67,13 @@ class Stream(object):
     def format_response(self, response):
         return [response] if type(response) != list else response
 
-    def write_page(self, page):
+    def write_page(self, ctx, page):
         """Formats a list of records in place and outputs the data to
         stdout."""
+        stream_data = ctx.catalog.get_stream(self.tap_stream_id)
+        schema = stream_data.schema.to_dict()
+        mdata = metadata.to_map(stream_data.metadata)
+        page = [transform(d, schema, metadata=mdata) for d in page]
         singer.write_records(self.tap_stream_id, page)
         self.metrics(page)
 
@@ -70,9 +83,30 @@ class Stream(object):
                 return context.is_selected()
         return False
 
+    def load_schema(self):
+        return load_schema(self.tap_stream_id)
+
+    def load_metadata(self):
+        schema = self.load_schema()
+        mdata = metadata.new()
+
+        mdata = metadata.write(mdata, (), 'table-key-properties', self.pk_fields)
+
+        if self.replication_key:
+            mdata = metadata.write(mdata, (), 'valid-replication-keys', [self.replication_key])
+
+        for field_name in schema['properties'].keys():
+            if field_name in self.pk_fields or field_name == self.replication_key:
+                mdata = metadata.write(mdata, ('properties', field_name), 'inclusion', 'automatic')
+            else:
+                mdata = metadata.write(mdata, ('properties', field_name), 'inclusion', 'available')
+
+        return metadata.to_list(mdata)
+
+
 class Everything(Stream):
     def sync(self, ctx):
-        self.write_page(ctx.client.request(self.tap_stream_id))
+        self.write_page(ctx, ctx.client.request(self.tap_stream_id))
 
 
 class Agents(Stream):
@@ -87,7 +121,7 @@ class Agents(Stream):
             page = ctx.client.request(self.tap_stream_id, params)
             if not page:
                 break
-            self.write_page(page)
+            self.write_page(ctx, page)
             since_id = page[-1]["id"] + 1
             ctx.set_bookmark(since_id_offset, since_id)
             ctx.write_state()
@@ -101,7 +135,7 @@ class Engagements(Stream):
             # __init__.py calls sync on all streams, but this one is handled
             # within the Chats stream, so ignore this call.
             return
-        self.write_page(engagements)
+        self.write_page(ctx, engagements)
 
 
 class Chats(Stream):
@@ -267,7 +301,7 @@ class Chats(Stream):
                         engagement['chat_id'] = chat['id']
                     engagements.sync(ctx, engagements_data)
 
-            self.write_page(chats)
+            self.write_page(ctx, chats)
             ctx.set_bookmark(ts_bookmark_key, max_bookmark)
             ctx.write_state()
 
@@ -309,21 +343,21 @@ class Triggers(Stream):
             definition = trigger["definition"]
             for k in ["condition", "actions"]:
                 definition[k] = json.dumps(definition[k])
-        self.write_page(page)
+        self.write_page(ctx, page)
 
 
 class Bans(Stream):
     def sync(self, ctx):
         response = ctx.client.request(self.tap_stream_id)
         page = response["visitor"] + response["ip_address"]
-        self.write_page(page)
+        self.write_page(ctx, page)
 
 
 class Account(Stream):
     def sync(self, ctx):
         # The account endpoint returns a single item, so we have to wrap it in
         # a list to write a "page"
-        self.write_page([ctx.client.request(self.tap_stream_id)])
+        self.write_page(ctx, [ctx.client.request(self.tap_stream_id)])
 
 DEPARTMENTS = Everything("departments", ["id"])
 ACCOUNT = Account("account", ["account_key"])

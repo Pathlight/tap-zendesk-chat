@@ -1,31 +1,17 @@
 #!/usr/bin/env python3
-import os
 import singer
-from singer import metrics, utils
+from singer import utils
 from singer.catalog import Catalog, CatalogEntry, Schema
 from requests.exceptions import HTTPError
+
 from . import streams as streams_
 from .context import Context
+from .discover import discover_streams
 from .http import Client
+from .util import load_schema
 
 REQUIRED_CONFIG_KEYS = ["start_date", "access_token"]
 LOGGER = singer.get_logger()
-
-
-def get_abs_path(path):
-    return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
-
-
-def load_schema(tap_stream_id):
-    path = "schemas/{}.json".format(tap_stream_id)
-    schema = utils.load_json(get_abs_path(path))
-    dependencies = schema.pop("tap_schema_dependencies", [])
-    refs = {}
-    for sub_stream_id in dependencies:
-        refs[sub_stream_id] = load_schema(sub_stream_id)
-    if refs:
-        singer.resolve_schema_references(schema, refs)
-    return schema
 
 
 def ensure_credentials_are_authorized(client):
@@ -55,25 +41,17 @@ def discover(config):
     client = Client(config)
     ensure_credentials_are_authorized(client)
     include_account_stream = is_account_endpoint_authorized(client)
-    catalog = Catalog([])
-    for stream in streams_.all_streams:
-        if (not include_account_stream
-            and stream.tap_stream_id == streams_.ACCOUNT.tap_stream_id):
-            continue
-        schema = Schema.from_dict(load_schema(stream.tap_stream_id),
-                                  inclusion="automatic")
-        catalog.streams.append(CatalogEntry(
-            stream=stream.tap_stream_id,
-            tap_stream_id=stream.tap_stream_id,
-            key_properties=stream.pk_fields,
-            schema=schema,
-        ))
-    return catalog
+    streams = [
+        s for s in streams_.all_streams
+        if include_account_stream or s.tap_stream_id != streams_.ACCOUNT.tap_stream_id
+    ]
+    catalog = {"streams": discover_streams(streams)}
+    return Catalog.from_dict(catalog)
 
 
-def output_schema(stream):
-    schema = load_schema(stream.tap_stream_id)
-    singer.write_schema(stream.tap_stream_id, schema, stream.pk_fields)
+def output_schema(ctx, stream):
+    stream_data = ctx.catalog.get_stream(stream.tap_stream_id)
+    singer.write_schema(stream.tap_stream_id, stream_data.schema.to_dict(), stream.pk_fields)
 
 
 def sync(ctx):
@@ -87,7 +65,7 @@ def sync(ctx):
     for stream in streams:
         # Output schemas of all streams to start so that we can output
         # records of any type when needed.
-        output_schema(stream)
+        output_schema(ctx, stream)
     for stream in streams:
         ctx.state["currently_syncing"] = stream.tap_stream_id
         ctx.write_state()
